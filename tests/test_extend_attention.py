@@ -20,9 +20,6 @@ import torch
 import flaggems_sglang
 from flaggems_sglang.reference import get_reference
 
-reference = get_reference("extend_attention")
-
-
 # ---------------------------------------------------------------------------
 # Tolerance helper (from kernel-comp-baseline/harness/correctness.py)
 # ---------------------------------------------------------------------------
@@ -166,20 +163,17 @@ def _check(actual, expected):
     assert_close(actual.to(torch.float32), expected, atol=1e-2, rtol=1e-2)
 
 
-CORRECTNESS_CASES = [
-    _case(4, 256, 12, 4, 128),
-    _case(4, 256, 12, 4, 80),
-    _case(2, 128, 8, 8, 64),
+_CASE_FACTORIES = [
+    lambda: _case(4, 256, 12, 4, 128),
+    lambda: _case(4, 256, 12, 4, 80),
+    lambda: _case(2, 128, 8, 8, 64),
 ]
-
-# Lazy (zero-arg callables): total token count scales with B * n_ctx, so
-# cases are generated one at a time by harness.bench.run_bench_cases rather
-# than all held in memory at once.
-BENCH_CASES = [
+_CASE_FACTORIES += [
     (lambda B=B, n_ctx=n_ctx: _case(B, n_ctx, 32, 8, 128))
     for B, n_ctx in ((1, 2048), (8, 2048), (64, 512), (256, 256))
 ]
-CORRECTNESS_CASES = CORRECTNESS_CASES + [c() for c in BENCH_CASES]
+
+CORRECTNESS_CASES = list(range(len(_CASE_FACTORIES)))
 
 
 # ---------------------------------------------------------------------------
@@ -190,7 +184,10 @@ CORRECTNESS_CASES = CORRECTNESS_CASES + [c() for c in BENCH_CASES]
 @pytest.mark.parametrize("case_idx", range(len(CORRECTNESS_CASES)))
 @pytest.mark.extend_attention
 def test_extend_attention(case_idx):
-    case = CORRECTNESS_CASES[case_idx]
+    # Build only this case; a module-level list would allocate
+    # every case's tensors at import time.
+    case = _CASE_FACTORIES[case_idx]()
+    reference = get_reference("extend_attention")
     check = (
         case.pop("check", None)
         if isinstance(case, dict) and "check" in case

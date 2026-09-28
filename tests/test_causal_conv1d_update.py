@@ -20,9 +20,6 @@ import torch
 import flaggems_sglang
 from flaggems_sglang.reference import get_reference
 
-reference = get_reference("causal_conv1d_update")
-
-
 # ---------------------------------------------------------------------------
 # Tolerance helper (from kernel-comp-baseline/harness/correctness.py)
 # ---------------------------------------------------------------------------
@@ -103,17 +100,15 @@ def _case(
     )
 
 
-CORRECTNESS_CASES = [
-    _case(2, 16, width=4, seqlen=1),
-    _case(5, 64, width=4, seqlen=1),
-    _case(3, 32, width=3, seqlen=4),
+_CASE_FACTORIES = [
+    lambda: _case(2, 16, width=4, seqlen=1),
+    lambda: _case(5, 64, width=4, seqlen=1),
+    lambda: _case(3, 32, width=3, seqlen=4),
+    lambda: _case(64, 4096, width=4, seqlen=1),
+    lambda: _case(256, 2048, width=4, seqlen=1),
 ]
 
-BENCH_CASES = [
-    _case(64, 4096, width=4, seqlen=1),
-    _case(256, 2048, width=4, seqlen=1),
-]
-CORRECTNESS_CASES = CORRECTNESS_CASES + BENCH_CASES
+CORRECTNESS_CASES = list(range(len(_CASE_FACTORIES)))
 
 
 # ---------------------------------------------------------------------------
@@ -124,7 +119,10 @@ CORRECTNESS_CASES = CORRECTNESS_CASES + BENCH_CASES
 @pytest.mark.parametrize("case_idx", range(len(CORRECTNESS_CASES)))
 @pytest.mark.causal_conv1d_update
 def test_causal_conv1d_update(case_idx):
-    case = CORRECTNESS_CASES[case_idx]
+    # Build only this case; a module-level list would allocate
+    # every case's tensors at import time.
+    case = _CASE_FACTORIES[case_idx]()
+    reference = get_reference("causal_conv1d_update")
     check = (
         case.pop("check", None)
         if isinstance(case, dict) and "check" in case

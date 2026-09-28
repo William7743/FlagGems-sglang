@@ -20,9 +20,6 @@ import torch
 import flaggems_sglang
 from flaggems_sglang.reference import get_reference
 
-reference = get_reference("chain_speculative_sampling")
-
-
 # ---------------------------------------------------------------------------
 # Tolerance helper (from kernel-comp-baseline/harness/correctness.py)
 # ---------------------------------------------------------------------------
@@ -112,15 +109,17 @@ def _check(actual, expected):
     assert torch.equal(a_num, e_num), "accept_token_num mismatch"
 
 
-CORRECTNESS_CASES = [
-    _case(4, 5, 32, seed=0),
-    _case(4, 5, 32, seed=1),
-    _case(8, 8, 128, seed=2),
-    _case(2, 3, 16, seed=3),
+_CASE_FACTORIES = [
+    lambda: _case(4, 5, 32, seed=0),
+    lambda: _case(4, 5, 32, seed=1),
+    lambda: _case(8, 8, 128, seed=2),
+    lambda: _case(2, 3, 16, seed=3),
+]
+_CASE_FACTORIES += [
+    (lambda b=b: _case(b, 4, 32000, seed=0)) for b in (1, 8, 64, 512, 4096)
 ]
 
-BENCH_CASES = [_case(b, 4, 32000, seed=0) for b in (1, 8, 64, 512, 4096)]
-CORRECTNESS_CASES = CORRECTNESS_CASES + BENCH_CASES
+CORRECTNESS_CASES = list(range(len(_CASE_FACTORIES)))
 
 
 # ---------------------------------------------------------------------------
@@ -131,7 +130,10 @@ CORRECTNESS_CASES = CORRECTNESS_CASES + BENCH_CASES
 @pytest.mark.parametrize("case_idx", range(len(CORRECTNESS_CASES)))
 @pytest.mark.chain_speculative_sampling
 def test_chain_speculative_sampling(case_idx):
-    case = CORRECTNESS_CASES[case_idx]
+    # Build only this case; a module-level list would allocate
+    # every case's tensors at import time.
+    case = _CASE_FACTORIES[case_idx]()
+    reference = get_reference("chain_speculative_sampling")
     check = (
         case.pop("check", None)
         if isinstance(case, dict) and "check" in case

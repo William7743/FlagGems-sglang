@@ -20,9 +20,6 @@ import torch
 import flaggems_sglang
 from flaggems_sglang.reference import get_reference
 
-reference = get_reference("l2norm")
-
-
 # ---------------------------------------------------------------------------
 # Tolerance helper (from kernel-comp-baseline/harness/correctness.py)
 # ---------------------------------------------------------------------------
@@ -69,15 +66,19 @@ def _case(t, d):
     return dict(x=_x(t, d))
 
 
-CORRECTNESS_CASES = [
-    _case(1, 64),
-    _case(83, 128),
-    _case(256, 256),
-    _case(3, 1024),
+_CASE_FACTORIES = [
+    lambda: _case(1, 64),
+    lambda: _case(83, 128),
+    lambda: _case(256, 256),
+    lambda: _case(3, 1024),
+]
+_CASE_FACTORIES += [
+    (lambda t=t, d=d: _case(t, d))
+    for t in (1, 32, 512, 4096)
+    for d in (64, 128, 256)
 ]
 
-BENCH_CASES = [_case(t, d) for t in (1, 32, 512, 4096) for d in (64, 128, 256)]
-CORRECTNESS_CASES = CORRECTNESS_CASES + BENCH_CASES
+CORRECTNESS_CASES = list(range(len(_CASE_FACTORIES)))
 
 
 # ---------------------------------------------------------------------------
@@ -88,7 +89,10 @@ CORRECTNESS_CASES = CORRECTNESS_CASES + BENCH_CASES
 @pytest.mark.parametrize("case_idx", range(len(CORRECTNESS_CASES)))
 @pytest.mark.l2norm
 def test_l2norm(case_idx):
-    case = CORRECTNESS_CASES[case_idx]
+    # Build only this case; a module-level list would allocate
+    # every case's tensors at import time.
+    case = _CASE_FACTORIES[case_idx]()
+    reference = get_reference("l2norm")
     check = (
         case.pop("check", None)
         if isinstance(case, dict) and "check" in case

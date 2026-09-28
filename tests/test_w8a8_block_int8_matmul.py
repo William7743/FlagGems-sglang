@@ -20,9 +20,6 @@ import torch
 import flaggems_sglang
 from flaggems_sglang.reference import get_reference
 
-reference = get_reference("w8a8_block_int8_matmul")
-
-
 # ---------------------------------------------------------------------------
 # Tolerance helper (from kernel-comp-baseline/harness/correctness.py)
 # ---------------------------------------------------------------------------
@@ -115,18 +112,18 @@ def _check(actual, expected):
     assert_close(actual, expected, atol=0.5, rtol=1e-2)
 
 
-CORRECTNESS_CASES = [
-    _case(7, 256, 512),
-    _case(64, 1024, 512),
-    _case(256, 1024, 4096),
+_CASE_FACTORIES = [
+    lambda: _case(7, 256, 512),
+    lambda: _case(64, 1024, 512),
+    lambda: _case(256, 1024, 4096),
 ]
-
-BENCH_CASES = [
-    _case(m, n, k)
+_CASE_FACTORIES += [
+    (lambda m=m, n=n, k=k: _case(m, n, k))
     for m in (1, 8, 64, 512, 4096)
     for n, k in ((1024, 4096), (4096, 4096), (7168, 4096))
 ]
-CORRECTNESS_CASES = CORRECTNESS_CASES + BENCH_CASES
+
+CORRECTNESS_CASES = list(range(len(_CASE_FACTORIES)))
 
 
 # ---------------------------------------------------------------------------
@@ -137,7 +134,10 @@ CORRECTNESS_CASES = CORRECTNESS_CASES + BENCH_CASES
 @pytest.mark.parametrize("case_idx", range(len(CORRECTNESS_CASES)))
 @pytest.mark.w8a8_block_int8_matmul
 def test_w8a8_block_int8_matmul(case_idx):
-    case = CORRECTNESS_CASES[case_idx]
+    # Build only this case; a module-level list would allocate
+    # every case's tensors at import time.
+    case = _CASE_FACTORIES[case_idx]()
+    reference = get_reference("w8a8_block_int8_matmul")
     check = (
         case.pop("check", None)
         if isinstance(case, dict) and "check" in case
