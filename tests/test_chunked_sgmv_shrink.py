@@ -20,9 +20,6 @@ import torch
 import flaggems_sglang
 from flaggems_sglang.reference import get_reference
 
-reference = get_reference("chunked_sgmv_shrink")
-
-
 # ---------------------------------------------------------------------------
 # Tolerance helper (from kernel-comp-baseline/harness/correctness.py)
 # ---------------------------------------------------------------------------
@@ -99,17 +96,15 @@ def _case(
 
 # BLOCK_M == max(seg_lens) is used directly as a Triton arange size, so the
 # largest segment in each case must be a power of 2.
-CORRECTNESS_CASES = [
-    _case([8], 1, 16, 64),
-    _case([3, 7, 0, 16], 2, 16, 128, num_slices=1),
-    _case([16, 4], 2, 32, 256, num_slices=3, permutation="shuffled"),
+_CASE_FACTORIES = [
+    lambda: _case([8], 1, 16, 64),
+    lambda: _case([3, 7, 0, 16], 2, 16, 128, num_slices=1),
+    lambda: _case([16, 4], 2, 32, 256, num_slices=3, permutation="shuffled"),
+    lambda: _case([64] * 8, 4, 32, 4096),
+    lambda: _case([256] * 4, 2, 64, 4096),
 ]
 
-BENCH_CASES = [
-    _case([64] * 8, 4, 32, 4096),
-    _case([256] * 4, 2, 64, 4096),
-]
-CORRECTNESS_CASES = CORRECTNESS_CASES + BENCH_CASES
+CORRECTNESS_CASES = list(range(len(_CASE_FACTORIES)))
 
 
 # ---------------------------------------------------------------------------
@@ -120,7 +115,10 @@ CORRECTNESS_CASES = CORRECTNESS_CASES + BENCH_CASES
 @pytest.mark.parametrize("case_idx", range(len(CORRECTNESS_CASES)))
 @pytest.mark.chunked_sgmv_shrink
 def test_chunked_sgmv_shrink(case_idx):
-    case = CORRECTNESS_CASES[case_idx]
+    # Build only this case; a module-level list would allocate
+    # every case's tensors at import time.
+    case = _CASE_FACTORIES[case_idx]()
+    reference = get_reference("chunked_sgmv_shrink")
     check = (
         case.pop("check", None)
         if isinstance(case, dict) and "check" in case

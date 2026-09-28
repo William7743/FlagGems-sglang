@@ -20,9 +20,6 @@ import torch
 import flaggems_sglang
 from flaggems_sglang.reference import get_reference
 
-reference = get_reference("hc_head")
-
-
 # ---------------------------------------------------------------------------
 # Tolerance helper (from kernel-comp-baseline/harness/correctness.py)
 # ---------------------------------------------------------------------------
@@ -107,14 +104,16 @@ def _case(
     )
 
 
-CORRECTNESS_CASES = [
-    _case(1, 2, 128),
-    _case(37, 4, 256),
-    _case(129, 2, 512),
+_CASE_FACTORIES = [
+    lambda: _case(1, 2, 128),
+    lambda: _case(37, 4, 256),
+    lambda: _case(129, 2, 512),
+]
+_CASE_FACTORIES += [
+    (lambda t=t: _case(t, 4, 7168)) for t in (1, 128, 2048, 8192)
 ]
 
-BENCH_CASES = [_case(t, 4, 7168) for t in (1, 128, 2048, 8192)]
-CORRECTNESS_CASES = CORRECTNESS_CASES + BENCH_CASES
+CORRECTNESS_CASES = list(range(len(_CASE_FACTORIES)))
 
 
 # ---------------------------------------------------------------------------
@@ -125,7 +124,10 @@ CORRECTNESS_CASES = CORRECTNESS_CASES + BENCH_CASES
 @pytest.mark.parametrize("case_idx", range(len(CORRECTNESS_CASES)))
 @pytest.mark.hc_head
 def test_hc_head(case_idx):
-    case = CORRECTNESS_CASES[case_idx]
+    # Build only this case; a module-level list would allocate
+    # every case's tensors at import time.
+    case = _CASE_FACTORIES[case_idx]()
+    reference = get_reference("hc_head")
     check = (
         case.pop("check", None)
         if isinstance(case, dict) and "check" in case

@@ -20,9 +20,6 @@ import torch
 import flaggems_sglang
 from flaggems_sglang.reference import get_reference
 
-reference = get_reference("fused_gdn_gating")
-
-
 # ---------------------------------------------------------------------------
 # Tolerance helper (from kernel-comp-baseline/harness/correctness.py)
 # ---------------------------------------------------------------------------
@@ -99,14 +96,14 @@ def _case(batch, num_heads, seed=0):
     return dict(A_log=a_log, a=a, b=b, dt_bias=dt_bias, check=_check)
 
 
-CORRECTNESS_CASES = [
-    _case(1, 4),
-    _case(37, 32),
-    _case(256, 8),
+_CASE_FACTORIES = [
+    lambda: _case(1, 4),
+    lambda: _case(37, 32),
+    lambda: _case(256, 8),
 ]
+_CASE_FACTORIES += [(lambda m=m: _case(m, 64)) for m in (1, 8, 64, 512, 4096)]
 
-BENCH_CASES = [_case(m, 64) for m in (1, 8, 64, 512, 4096)]
-CORRECTNESS_CASES = CORRECTNESS_CASES + BENCH_CASES
+CORRECTNESS_CASES = list(range(len(_CASE_FACTORIES)))
 
 
 # ---------------------------------------------------------------------------
@@ -117,7 +114,10 @@ CORRECTNESS_CASES = CORRECTNESS_CASES + BENCH_CASES
 @pytest.mark.parametrize("case_idx", range(len(CORRECTNESS_CASES)))
 @pytest.mark.fused_gdn_gating
 def test_fused_gdn_gating(case_idx):
-    case = CORRECTNESS_CASES[case_idx]
+    # Build only this case; a module-level list would allocate
+    # every case's tensors at import time.
+    case = _CASE_FACTORIES[case_idx]()
+    reference = get_reference("fused_gdn_gating")
     check = (
         case.pop("check", None)
         if isinstance(case, dict) and "check" in case
