@@ -19,6 +19,7 @@ import torch
 
 import flaggems_sglang
 from flaggems_sglang.reference import get_reference
+from flaggems_sglang.reference._lora_batch_utils import make_batch_info
 
 # ---------------------------------------------------------------------------
 # Tolerance helper (from kernel-comp-baseline/harness/correctness.py)
@@ -54,9 +55,6 @@ def assert_close(actual, expected, *, dtype=None, **overrides):
 # ---------------------------------------------------------------------------
 # Cases (from kernel-comp-baseline/problems/lora/chunked_sgmv_expand/cases.py)
 # ---------------------------------------------------------------------------
-
-
-from flaggems_sglang.reference._lora_batch_utils import make_batch_info
 
 
 def _case(

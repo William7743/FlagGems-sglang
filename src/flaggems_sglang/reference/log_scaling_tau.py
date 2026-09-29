@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
-
 
 def reference(x, tau):
     rows = x.shape[0]
